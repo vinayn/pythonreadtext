@@ -1,2 +1,2 @@
 # pythonreadtext
-The code uses East to detect text and tesseract to read detected box. 
+The code uses East to detect text in video and tesseract to read detected text box. 
