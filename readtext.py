@@ -5,57 +5,6 @@ from imutils.object_detection import non_max_suppression
 import pytesseract
 import time
 
-def get_rects(scores, geometry):
-	# grab the number of rows and columns from the scores volume, then
-	# initialize our set of bounding box rectangles and corresponding
-	# confidence scores
-	(numRows, numCols) = scores.shape[2:4]
-	rects = []
-	confidences = []
-	# loop over the number of rows
-	for y in range(0, numRows):
-		# extract the scores (probabilities), followed by the
-		# geometrical data used to derive potential bounding box
-		# coordinates that surround text
-		scoresData = scores[0, 0, y]
-		xData0 = geometry[0, 0, y]
-		xData1 = geometry[0, 1, y]
-		xData2 = geometry[0, 2, y]
-		xData3 = geometry[0, 3, y]
-		anglesData = geometry[0, 4, y]
-		# loop over the number of columns
-		for x in range(0, numCols):
-			# if our score does not have sufficient probability,
-			# ignore it
-
-			#if scoresData[x] < 0.5:
-			#	continue
-
-			# compute the offset factor as our resulting feature
-			# maps will be 4x smaller than the input image
-			(offsetX, offsetY) = (x * 4.0, y * 4.0)
-			# extract the rotation angle for the prediction and
-			# then compute the sin and cosine
-			angle = anglesData[x]
-			cos = np.cos(angle)
-			sin = np.sin(angle)
-			# use the geometry volume to derive the width and height
-			# of the bounding box
-			h = xData0[x] + xData2[x]
-			w = xData1[x] + xData3[x]
-			# compute both the starting and ending (x, y)-coordinates
-			# for the text prediction bounding box
-			endX = int(offsetX + (cos * xData1[x]) + (sin * xData2[x]))
-			endY = int(offsetY - (sin * xData1[x]) + (cos * xData2[x]))
-			startX = int(endX - w)
-			startY = int(endY - h)
-			# add the bounding box coordinates and probability score
-			# to our respective lists
-			rects.append((startX, startY, endX, endY))
-			confidences.append(scoresData[x])
-	# return a tuple of the bounding boxes and associated confidences
-	return (rects, confidences)
-
 ############ Utility functions ############
 def decode(scores, geometry, scoreThresh):
     detections = []
@@ -110,9 +59,9 @@ def decode(scores, geometry, scoreThresh):
             detections.append((center, (w, h), -1 * angle * 180.0 / math.pi))
             confidences.append(float(score))
 
-    (all_corners, all_corners_confidences) = get_rects(scores, geometry)
+    #(all_corners, all_corners_confidences) = get_rects(scores, geometry)
     # Return detections and confidences
-    return [detections, confidences, all_corners, all_corners_confidences]
+    return [detections, confidences]
 
 cap = cv2.VideoCapture(0)
 
@@ -174,7 +123,7 @@ while(cap.isOpened()):
 
 
 
-        [boxes, confidences, all_corners, all_corners_confidences] = decode(scores, geometry, 0.7)
+        [boxes, confidences] = decode(scores, geometry, 0.7)
         # Apply NMS
         indices = cv2.dnn.NMSBoxesRotated(boxes, confidences, 0.7, 0.4)
 
@@ -226,31 +175,21 @@ while(cap.isOpened()):
 
                 #text = pytesseract.image_to_string(roi, config=config)
                 #print(str(min(boxroi[:, 1])))
-                # order by y axis minimum value
+                #  Get the minimum value of y axis . If it is not there then add id
                 if min(boxroi[:, 1]) in orderbyYaxisminvalue :
                     orderbyYaxisminvalue[min(boxroi[:, 1])].append(boxroi)
                 else :
                     orderbyYaxisminvalue[min(boxroi[:, 1])] = []
                     orderbyYaxisminvalue[min(boxroi[:, 1])].append(boxroi)
 
-                orderbyYaxisminvalue[min(boxroi[:, 1])].append(boxroi)
-                #print(text)
+
 
             except Exception as e:
                 #print(' error min(boxroi[:, 1]) ' + str(min(boxroi[:, 1])) + ' max(boxroi[:, 1]) ' + str(max(
                 #    boxroi[:, 1])) + ' min(boxroi[:, 0]) ' + str(min(boxroi[:, 0])) + ' max(boxroi[:, 0]) ' + str(
                 #   max(boxroi[:, 0])))
                 print(str(e))
-            #print('without padding')
 
-
-
-
-            #roi = frame[startY:endY, startX:endX]
-            #config = ("-l eng --oem 1 --psm 7")
-            #text = pytesseract.image_to_string(roi, config=config)
-           # print('with padding')
-            #print(text)
 
 
             # scale the bounding box coordinates based on the respective ratios
@@ -262,83 +201,122 @@ while(cap.isOpened()):
                 p2 = (int(vertices[(j + 1) % 4][0]), int(vertices[(j + 1) % 4][1]))
                 cv2.line(frame, p1, p2, (0, 255, 0), 2, cv2.LINE_AA);
 
-                # extract the region of interest
-                # r = frame[startY:endY, startX:endX]
-                #r = frame[vertices[j][1]:vertices[(j + 1) % 4][1], vertices[j][0]:vertices[(j + 1) % 4][0]]
-                #r = frame[all_corners['startY']:all_corners['endY'], all_corners['startX']:all_corners['endX']]
+        #sort dictionary by key value
+        sorted_keys = sorted(orderbyYaxisminvalue.keys())
+        orderbyYaxisminvalue = {key: orderbyYaxisminvalue[key] for key in sorted_keys}
 
-                boxes_all_corners = non_max_suppression(np.array(all_corners), probs=all_corners_confidences)
-                # loop over the bounding boxes
-                for (startX, startY, endX, endY) in boxes_all_corners:
-                    # scale the bounding box coordinates based on the respective
-                    # ratios
-                    startX = int(startX * rW)
-                    startY = int(startY * rH)
-                    endX = int(endX * rW)
-                    endY = int(endY * rH)
+        #orderbyYaxisminvalue = sorted(orderbyYaxisminvalue.items())
 
-                    # in order to obtain a better OCR of the text we can potentially
-                    # apply a bit of padding surrounding the bounding box -- here we
-                    # are computing the deltas in both the x and y directions
-                    dX = int((endX - startX) * 0.0)
-                    dY = int((endY - startY) * 0.0)
-
-                    # apply padding to each side of the bounding box, respectively
-                    startX = max(0, startX - dX)
-                    startY = max(0, startY - dY)
-                    endX = min(W, endX + (dX * 2))
-                    endY = min(H, endY + (dY * 2))
-
-                    # draw the bounding box on the frame
-                    #cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+        # to avoid the  rotation of the book or display
+        temp_lowest_height = 7
+        #some negative value
+        mergingkey_y_axis = -100
+        keys_to_be_removed = []
 
 
-                    # extract the actual padded ROI
-                    #roi = frame[startY:endY, startX:endX]
+        #merge by nearest height value of y axis
+        if orderbyYaxisminvalue:
+            try:
+                # order by xaxis min value
+                #orderbyYaxisminvalue = sorted(orderbyYaxisminvalue,key=lambda x:x[1])
+                for temporderbyyaxiskey in orderbyYaxisminvalue:
+                    if mergingkey_y_axis != -100 and temporderbyyaxiskey <= (mergingkey_y_axis + temp_lowest_height) and temporderbyyaxiskey > mergingkey_y_axis:
+                        orderbyYaxisminvalue[mergingkey_y_axis].extend(orderbyYaxisminvalue[temporderbyyaxiskey])
+                        # delete the appended dictinary key
+                        # del orderbyYaxisminvalue[temporderbyxaxiskey]
 
-                    # in order to apply Tesseract v4 to OCR text we must supply
-                    # (1) a language, (2) an OEM flag of 4, indicating that the we
-                    # wish to use the LSTM neural net model for OCR, and finally
-                    # (3) an OEM value, in this case, 7 which implies that we are
-                    # treating the ROI as a single line of text
-
-                    #pytesseract.pytesseract.tesseract_cmd = 'D:/opencv/tessaractexe/vcpkg/installed/x64-windows-static/tools/tesseract/tesseract.exe'
-                    #pytesseract.pytesseract.tesseract_cmd = 'C:/Users/nvina/.conda/envs/tesseract/Library/bin/tesseract.exe'
-
-                    #config = ("-l eng --oem 1 --psm 7")
-                    #text = pytesseract.image_to_string(roi, config=config)
+                        # to remove runtime error
+                        keys_to_be_removed.append(temporderbyyaxiskey)
+                        continue
 
 
-                    # append bbox coordinate and associated text to the list of results
-                    #results.append(((vertices[j][0], vertices[j][1], vertices[(j + 1) % 4][0], vertices[(j + 1) % 4][1]), text))
-                    #results.append(((startX, startY, endX, endY), text))
+                    mergingkey_y_axis = temporderbyyaxiskey
 
-                    #if len(text) > 4:
-                    #    print(text)
+            except Exception as e:
+                print(str(e))
 
-                    # cv.putText(frame, "{:.3f}".format(confidences[i[0]]), (vertices[0][0], vertices[0][1]), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv.LINE_AA)
-
-        if orderbyYaxisminvalue :
+        """
+        #merge by nearest height value of y axis
+        if orderbyYaxisminvalue:
             try:
                 # order by xaxis min value
                 #orderbyYaxisminvalue = sorted(orderbyYaxisminvalue,key=lambda x:x[1])
                 for temporderbyxaxiskey in orderbyYaxisminvalue:
-                    #orderbyYaxisminvalue[temporderbyxaxiskey] = sorted(enumerate(orderbyYaxisminvalue[temporderbyxaxiskey]),key=lambda x: x[0])
+
+                    if mergingkey_y_axis != -100:
+                        if temporderbyxaxiskey <= (mergingkey_y_axis+temp_lowest_height) and temporderbyxaxiskey > mergingkey_y_axis:
+                            orderbyYaxisminvalue[mergingkey_y_axis].extend(orderbyYaxisminvalue[temporderbyxaxiskey])
+                            #delete the appended dictinary key
+                            #del orderbyYaxisminvalue[temporderbyxaxiskey]
+
+                            #to remove runtime error
+                            keys_to_be_removed.append(temporderbyxaxiskey)
+                            continue
+
+
+                    for eachboxkey,eachboxvalue in enumerate(orderbyYaxisminvalue[temporderbyxaxiskey]):
+                        lowest_x,lowest_y,lowest_w,lowest_height = cv2.boundingRect(orderbyYaxisminvalue[temporderbyxaxiskey][eachboxkey])
+
+                        #get the lowest height
+                        if temp_lowest_height == 0 :
+                            temp_lowest_height = lowest_height
+                        else :
+                            if lowest_height < temp_lowest_height:
+                                temp_lowest_height = (lowest_height/2)
+
+
+                    if mergingkey_y_axis == -100:
+                        mergingkey_y_axis = temporderbyxaxiskey
+
+
+            except Exception as e:
+                print(str(e))
+
+
+
+        """
+
+        for k in keys_to_be_removed:
+            del orderbyYaxisminvalue[k]
+
+
+        #print(" printing new detection ")
+        # order by xaxis min value
+        if orderbyYaxisminvalue :
+            try:
+                # order by xaxis min value
+                #orderbyYaxisminvalue = sorted(orderbyYaxisminvalue,key=lambda x:x[1])
+
+                #tempdicorder = dict(sorted(orderbyYaxisminvalue.items(), key=lambda item: item[1]))
+
+                for temporderbyxaxiskey in orderbyYaxisminvalue:
+
+
+                    """    
                     for eachboxkey,eachboxvalue in enumerate(orderbyYaxisminvalue[temporderbyxaxiskey]) :
                         orderbyYaxisminvalue[temporderbyxaxiskey][eachboxkey] = np.asarray(sorted(orderbyYaxisminvalue[temporderbyxaxiskey][eachboxkey],
                                                                            key=lambda x: x[0]))
-                    #print(' ok ' + str(temporderbyxaxiskey) + ' ok')
-                    #print(orderbyYaxisminvalue[temporderbyxaxiskey])
-                    #orderbyYaxisminvalue[temporderbyxaxiskey] = sorted(orderbyYaxisminvalue[temporderbyxaxiskey],key=lambda x:x[1][0])
+                                                                           
+                    """
 
-                relatedtext = ''
+
+
+                # Related text
+                relatedtext = None
                 for temporderbyxaxiskey in orderbyYaxisminvalue:
                     for eachboxvalue in orderbyYaxisminvalue[temporderbyxaxiskey]:
                         roi = frame[min(eachboxvalue[:, 1]):max(eachboxvalue[:, 1]), min(eachboxvalue[:, 0]):max(eachboxvalue[:, 0])]
                         config = ("-l eng --oem 1 --psm 7")
-                        relatedtext +=  pytesseract.image_to_string(roi, config=config)
+                        if relatedtext is None:
+                            relatedtext =  pytesseract.image_to_string(roi, config=config).replace('\n', '').replace('\f', '')
+                        else:
+                            relatedtext += ' ' + pytesseract.image_to_string(roi, config=config).replace('\n', '').replace('\f', '')
+
+
                     print(relatedtext)
-                    print('New line')
+                    #empty the string
+                    relatedtext = None
+
 
             except Exception as e:
                 print(str(e))
